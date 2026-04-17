@@ -1,6 +1,7 @@
 from typing import List, Optional
+from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class AskRequest(BaseModel):
@@ -74,9 +75,25 @@ class AgenticAskResponse(AskResponse):
 class FeedbackRequest(BaseModel):
     """Request model for user feedback on RAG answers."""
 
-    trace_id: str = Field(..., description="Langfuse trace ID from the response")
-    score: float = Field(..., description="Feedback score (0-1 or -1 to 1)", ge=-1, le=1)
+    trace_id: str = Field(..., description="Langfuse trace ID from the response", min_length=1)
+    score: float = Field(..., description="Feedback score (-1 to 1)", ge=-1, le=1)
     comment: Optional[str] = Field(None, description="Optional feedback comment", max_length=1000)
+
+    @field_validator("trace_id")
+    @classmethod
+    def validate_trace_id(cls, v: str) -> str:
+        """Validate trace_id is not empty and sanitized."""
+        if not v or not v.strip():
+            raise ValueError("trace_id cannot be empty")
+        return v.strip()
+
+    @field_validator("comment")
+    @classmethod
+    def validate_comment(cls, v: Optional[str]) -> Optional[str]:
+        """Sanitize comment text."""
+        if v is None:
+            return v
+        return v.strip() if v else None
 
     class Config:
         json_schema_extra = {
@@ -93,11 +110,17 @@ class FeedbackResponse(BaseModel):
 
     success: bool = Field(..., description="Whether feedback was recorded successfully")
     message: str = Field(..., description="Status message")
+    request_id: Optional[str] = Field(None, description="Request tracking ID for debugging")
+    timestamp: datetime = Field(default_factory=datetime.utcnow, description="Response timestamp")
+    trace_id: Optional[str] = Field(None, description="Original trace_id for reference")
 
     class Config:
         json_schema_extra = {
             "example": {
                 "success": True,
                 "message": "Feedback recorded successfully",
+                "request_id": "req-123-456",
+                "timestamp": "2026-02-24T12:00:00Z",
+                "trace_id": "abc123-def456-ghi789",
             }
         }

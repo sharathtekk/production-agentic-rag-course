@@ -50,3 +50,4 @@ WORKDIR ${AIRFLOW_HOME}
 EXPOSE 8080
 
 CMD ["/entrypoint.sh"]
+#ENTRYPOINT ["/entrypoint.sh"]

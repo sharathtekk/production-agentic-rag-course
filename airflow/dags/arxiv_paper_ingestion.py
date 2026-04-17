@@ -6,6 +6,7 @@ from airflow.operators.python import PythonOperator
 from arxiv_ingestion.fetching import fetch_daily_papers
 from arxiv_ingestion.indexing import index_papers_hybrid, verify_hybrid_index
 from arxiv_ingestion.reporting import generate_daily_report
+from arxiv_ingestion.setup import setup_environment
 
 # Import task functions from modular structure
 from arxiv_ingestion.setup import setup_environment
@@ -64,7 +65,7 @@ cleanup_task = BashOperator(
     bash_command="""
     echo "Cleaning up temporary files..."
     # Remove PDFs older than 30 days to manage disk space
-    find /tmp -name "*.pdf" -type f -mtime +30 -delete 2>/dev/null || true
+    find /tmp/arxiv_papers -name "*.pdf" -type f -mtime +30 -delete 2>/dev/null || true
     echo "Cleanup completed"
     """,
     dag=dag,

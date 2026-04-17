@@ -87,6 +87,7 @@ class TextChunker:
                 logger.warning(f"Section-based chunking failed for {arxiv_id}: {e}")
 
         # Fallback to traditional word-based chunking
+        logger.info(f"Full text passed to chunk_paper {full_text}")
         logger.info(f"Using traditional word-based chunking for {arxiv_id}")
         return self.chunk_text(full_text, arxiv_id, paper_id)
 
