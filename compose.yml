@@ -2,7 +2,7 @@ services:
   # API service
   api:
     build: .
-    container_name: rag-api
+    container_name: rag-api-new
     ports:
       - "8000:8000"
     depends_on:

@@ -28,17 +28,16 @@ async def _prepare_chunks_and_sources(
     # Handle embeddings for hybrid search
     query_embedding = None
     if request.use_hybrid:
-        with rag_tracer.trace_embedding(trace, request.query) as embedding_span:
+        with rag_tracer.trace_embedding(trace, request.query):
             try:
                 query_embedding = await embeddings_service.embed_query(request.query)
                 logger.info("Generated query embedding for hybrid search")
             except Exception as e:
                 logger.warning(f"Failed to generate embeddings, falling back to BM25: {e}")
-                if embedding_span:
-                    rag_tracer.tracer.update_span(embedding_span, output={"success": False, "error": str(e)})
+                raise  # Re-raise to let the context manager handle the error
 
     # Search with tracing
-    with rag_tracer.trace_search(trace, request.query, request.top_k) as search_span:
+    with rag_tracer.trace_search(trace, request.query, request.top_k):
         search_results = opensearch_client.search_unified(
             query=request.query,
             query_embedding=query_embedding,
@@ -70,8 +69,7 @@ async def _prepare_chunks_and_sources(
                 arxiv_id_clean = arxiv_id.split("v")[0] if "v" in arxiv_id else arxiv_id
                 sources_set.add(f"https://arxiv.org/pdf/{arxiv_id_clean}.pdf")
 
-        # End search span with essential metadata
-        rag_tracer.end_search(search_span, chunks, arxiv_ids, search_results.get("total", 0))
+        # No need to call end_search anymore - context manager handles it
 
     return chunks, list(sources_set), arxiv_ids
 
@@ -123,7 +121,7 @@ async def ask_question(
                 return response
 
             # Build prompt
-            with rag_tracer.trace_prompt_construction(trace, chunks) as prompt_span:
+            with rag_tracer.trace_prompt_construction(trace, chunks):
                 from src.services.ollama.prompts import RAGPromptBuilder
 
                 prompt_builder = RAGPromptBuilder()
@@ -134,12 +132,12 @@ async def ask_question(
                 except Exception:
                     final_prompt = prompt_builder.create_rag_prompt(request.query, chunks)
 
-                rag_tracer.end_prompt(prompt_span, final_prompt)
-
             # Generate answer
-            with rag_tracer.trace_generation(trace, request.model, final_prompt) as gen_span:
+            gen_span = rag_tracer.start_generation(trace, request.model, final_prompt)
+            try:
                 rag_response = await ollama_client.generate_rag_answer(query=request.query, chunks=chunks, model=request.model)
                 answer = rag_response.get("answer", "Unable to generate answer")
+            finally:
                 rag_tracer.end_generation(gen_span, answer, request.model)
 
             # Prepare response
@@ -224,15 +222,15 @@ async def ask_question_stream(
                 yield f"data: {json.dumps(metadata_response)}\n\n"
 
                 # Build prompt
-                with rag_tracer.trace_prompt_construction(trace, chunks) as prompt_span:
+                with rag_tracer.trace_prompt_construction(trace, chunks):
                     from src.services.ollama.prompts import RAGPromptBuilder
 
                     prompt_builder = RAGPromptBuilder()
                     final_prompt = prompt_builder.create_rag_prompt(request.query, chunks)
-                    rag_tracer.end_prompt(prompt_span, final_prompt)
 
                 # Stream generation
-                with rag_tracer.trace_generation(trace, request.model, final_prompt) as gen_span:
+                gen_span = rag_tracer.start_generation(trace, request.model, final_prompt)
+                try:
                     full_response = ""
                     async for chunk in ollama_client.generate_rag_answer_stream(
                         query=request.query, chunks=chunks, model=request.model
@@ -243,9 +241,10 @@ async def ask_question_stream(
                             yield f"data: {json.dumps({'chunk': text_chunk})}\n\n"
 
                         if chunk.get("done", False):
-                            rag_tracer.end_generation(gen_span, full_response, request.model)
                             yield f"data: {json.dumps({'answer': full_response, 'done': True})}\n\n"
                             break
+                finally:
+                    rag_tracer.end_generation(gen_span, full_response, request.model)
 
                 rag_tracer.end_request(trace, full_response, time.time() - start_time)
 

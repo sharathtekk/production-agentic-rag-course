@@ -15,7 +15,10 @@ RUN apt-get update && \
         libpq-dev \
         poppler-utils \
         tesseract-ocr \
-        && rm -rf /var/lib/apt/lists/*
+        libgl1 \
+        libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
 
 # Create airflow user with UID/GID 50000 for cross-platform compatibility
 RUN groupadd -r -g 50000 airflow && useradd -r -u 50000 -g airflow -d ${AIRFLOW_HOME} -s /bin/bash airflow
@@ -36,7 +39,9 @@ RUN pip install --no-cache-dir \
 
 # Copy requirements and install project dependencies
 COPY requirements-airflow.txt /tmp/requirements-airflow.txt
-RUN pip install --no-cache-dir -r /tmp/requirements-airflow.txt
+RUN pip install --no-cache-dir -r /tmp/requirements-airflow.txt && \
+    pip uninstall -y opencv-python opencv-python-headless && \
+    pip install --no-cache-dir opencv-python-headless
 
 # Copy and set up entrypoint script
 COPY entrypoint.sh /entrypoint.sh

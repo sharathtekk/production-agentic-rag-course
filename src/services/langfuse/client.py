@@ -1,6 +1,6 @@
 import logging
 from contextlib import contextmanager
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from langfuse import Langfuse
 from src.config import Settings
@@ -34,13 +34,41 @@ class LangfuseTracer:
         else:
             logger.info("Langfuse tracing disabled or missing credentials")
 
+    @contextmanager
+    def trace_rag_request(
+        self,
+        query: str,
+        user_id: Optional[str] = None,
+        session_id: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+    ):
+        """Create a top-level trace span for a RAG request."""
+        if not self.client:
+            yield None
+            return
+
+        try:
+            trace = self.client.start_span(
+                name="rag_request",
+                input={
+                    "query": query,
+                    "user_id": user_id,
+                    "session_id": session_id,
+                },
+                metadata=metadata or {},
+            )
+            yield trace
+        except Exception as e:
+            logger.error(f"Error starting RAG trace: {e}")
+            yield None
+
     def get_callback_handler(
         self,
         trace_name: Optional[str] = None,
         user_id: Optional[str] = None,
         session_id: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
-        tags: Optional[list[str]] = None,
+        tags: Optional[List[str]] = None,
     ):
         """
         Get a CallbackHandler for LangChain/LangGraph integration.
@@ -85,7 +113,7 @@ class LangfuseTracer:
         user_id: Optional[str] = None,
         session_id: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
-        tags: Optional[list[str]] = None,
+        tags: Optional[List[str]] = None,
     ):
         """
         Context manager to wrap LangGraph agent execution with a top-level trace span.
@@ -254,10 +282,10 @@ class LangfuseTracer:
             logger.error(f"Error creating generation span: {e}")
             yield None
 
-    @contextmanager
     def start_span(
         self,
-        name: str,
+        trace=None,
+        name: str = "",
         input_data: Optional[Any] = None,
         metadata: Optional[Dict[str, Any]] = None,
     ):
@@ -270,34 +298,38 @@ class LangfuseTracer:
         - Document grading logic
         - Any other processing step
 
-        Usage:
-            with tracer.start_span(name="retrieve_papers", input_data={"query": q}) as span:
-                docs = retrieve(...)
-                span.update(output={"docs_count": len(docs)})
-
         Args:
+            trace: Optional parent span/trace context for nesting
             name: Name for this span (e.g., "retrieve_papers", "grade_documents")
             input_data: Input to this operation
             metadata: Additional metadata
 
-        Yields:
-            Span context object for updates
+        Returns:
+            Span object for updates
         """
         if not self.client:
-            # No-op context when disabled
-            yield None
-            return
+            return None
 
         try:
-            span = self.client.span(
-                name=name,
-                input=input_data,
-                metadata=metadata or {},
-            )
-            yield span
+            if trace is not None:
+                span = trace.start_span(
+                    name=name,
+                    input=input_data,
+                    metadata=metadata or {},
+                )
+            else:
+                span = self.client.start_span(
+                    name=name,
+                    input=input_data,
+                    metadata=metadata or {},
+                )
+            return span
         except Exception as e:
             logger.error(f"Error creating span: {e}")
-            yield None
+            return None
+
+    # Alias for compatibility with RAGTracer
+    create_span = start_span
 
     def update_generation(
         self,

@@ -31,25 +31,35 @@ class RAGTracer:
         """Query embedding operation with timing."""
         start_time = time.time()
         span = self.tracer.create_span(
-            trace=trace, name="query_embedding", input_data={"query": query, "query_length": len(query)}
+            name="query_embedding", input_data={"query": query, "query_length": len(query)}
         )
+        success = False
+        error_msg = None
         try:
-            yield span
+            yield  # Don't yield the span, just provide context
+            success = True
+        except Exception as e:
+            error_msg = str(e)
+            raise
         finally:
             duration = time.time() - start_time
             if span:
-                self.tracer.update_span(span=span, output={"embedding_duration_ms": round(duration * 1000, 2), "success": True})
-                span.end()
+                output = {"embedding_duration_ms": round(duration * 1000, 2), "success": success}
+                if error_msg:
+                    output["error"] = error_msg
+                self.tracer.update_span(span=span, output=output)
 
     @contextmanager
     def trace_search(self, trace, query: str, top_k: int):
         """Search operation with timing."""
-        span = self.tracer.create_span(trace=trace, name="search_retrieval", input_data={"query": query, "top_k": top_k})
+        start_time = time.time()
+        span = self.tracer.create_span(name="search_retrieval", input_data={"query": query, "top_k": top_k})
         try:
-            yield span
+            yield  # Don't yield the span, just provide context
         finally:
+            duration = time.time() - start_time
             if span:
-                span.end()
+                self.tracer.update_span(span=span, output={"search_duration_ms": round(duration * 1000, 2)})
 
     def end_search(self, span, chunks: List[Dict], arxiv_ids: List[str], total_hits: int):
         """End search span with essential results."""
@@ -69,12 +79,14 @@ class RAGTracer:
     @contextmanager
     def trace_prompt_construction(self, trace, chunks: List[Dict]):
         """Prompt building with timing."""
-        span = self.tracer.create_span(trace=trace, name="prompt_construction", input_data={"chunk_count": len(chunks)})
+        start_time = time.time()
+        span = self.tracer.create_span(name="prompt_construction", input_data={"chunk_count": len(chunks)})
         try:
-            yield span
+            yield  # Don't yield the span, just provide context
         finally:
+            duration = time.time() - start_time
             if span:
-                span.end()
+                self.tracer.update_span(span=span, output={"prompt_construction_duration_ms": round(duration * 1000, 2)})
 
     def end_prompt(self, span, prompt: str):
         """End prompt span with final prompt."""
@@ -90,24 +102,26 @@ class RAGTracer:
             },
         )
 
-    @contextmanager
-    def trace_generation(self, trace, model: str, prompt: str):
-        """LLM generation with timing."""
+    def start_generation(self, trace, model: str, prompt: str):
+        """Start LLM generation span."""
         span = self.tracer.create_span(
-            trace=trace, name="llm_generation", input_data={"model": model, "prompt_length": len(prompt), "prompt": prompt}
+            name="llm_generation", input_data={"model": model, "prompt_length": len(prompt)}
         )
-        try:
-            yield span
-        finally:
-            if span:
-                span.end()
+        return span
 
     def end_generation(self, span, response: str, model: str):
         """End generation span with response."""
         if not span:
             return
 
-        self.tracer.update_span(span=span, output={"response": response, "response_length": len(response), "model_used": model})
+        self.tracer.update_span(
+            span=span,
+            output={
+                "response": response,
+                "response_length": len(response),
+                "model_used": model
+            },
+        )
 
     def end_request(self, trace, response: str, total_duration: float):
         """End main request trace."""
