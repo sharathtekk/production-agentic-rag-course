@@ -48,13 +48,15 @@ class LangfuseTracer:
             return
 
         try:
-            trace = self.client.start_span(
+            trace = self.client.trace(
                 name="rag_request",
                 input={
                     "query": query,
                     "user_id": user_id,
                     "session_id": session_id,
                 },
+                user_id=user_id,
+                session_id=session_id,
                 metadata=metadata or {},
             )
             yield trace
@@ -89,12 +91,12 @@ class LangfuseTracer:
             return None
 
         try:
-            # Import v3 CallbackHandler (new path)
             from langfuse.langchain import CallbackHandler
 
-            # Create handler with trace metadata
-            # Note: flush settings are now on the client, not the handler
             handler = CallbackHandler(
+                public_key=self.settings.public_key,
+                secret_key=self.settings.secret_key,
+                host=self.settings.host,
                 trace_name=trace_name,
                 user_id=user_id,
                 session_id=session_id,

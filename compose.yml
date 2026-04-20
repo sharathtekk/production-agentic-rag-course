@@ -265,6 +265,8 @@ services:
       - "3000:3000"
     environment:
       NEXTAUTH_URL: http://localhost:3000
+      HOST: 0.0.0.0
+      PORT: 3000
       # Security: Load sensitive values from .env file
       NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET}
       DATABASE_URL: postgresql://langfuse:langfuse@langfuse-postgres:5432/langfuse
@@ -296,13 +298,13 @@ services:
       REDIS_PORT: 6379
       REDIS_AUTH: ${LANGFUSE_REDIS_PASSWORD}
       REDIS_TLS_ENABLED: "false"
-      LANGFUSE_INIT_ORG_NAME: "RAG Organization"
-      LANGFUSE_INIT_PROJECT_NAME: "Agentic RAG"
-      LANGFUSE_INIT_USER_EMAIL: "admin@example.com"
-      LANGFUSE_INIT_USER_NAME: "Admin User"
-      LANGFUSE_INIT_USER_PASSWORD: "admin123"
+      LANGFUSE_INIT_ORG_NAME: ${LANGFUSE_INIT_ORG_NAME}
+      LANGFUSE_INIT_PROJECT_NAME: ${LANGFUSE_INIT_PROJECT_NAME}
+      LANGFUSE_INIT_USER_EMAIL: ${LANGFUSE_INIT_USER_EMAIL}
+      LANGFUSE_INIT_USER_NAME: ${LANGFUSE_INIT_USER_NAME}
+      LANGFUSE_INIT_USER_PASSWORD: ${LANGFUSE_INIT_USER_PASSWORD}
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:3000/api/public/health || exit 1"]
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://$(hostname -i):3000/api/public/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 5
