@@ -12,6 +12,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      langfuse-web:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')\""]
       interval: 30s
@@ -26,8 +28,10 @@ services:
       - OPENSEARCH__HOST=http://opensearch:9200
       - OLLAMA_HOST=http://ollama:11434
       - POSTGRES_DATABASE_URL=postgresql+psycopg2://rag_user:rag_password@postgres:5432/rag_db
-      - LANGFUSE_HOST=http://langfuse-web:3000 
-      - LANGFUSE_DEBUG=true
+      # Langfuse configuration (must use LANGFUSE__ prefix for Python config)
+      - LANGFUSE__HOST=http://langfuse-web:3000
+      - LANGFUSE__ENABLED=true
+      - LANGFUSE__DEBUG=true
       - REDIS__HOST=redis
     networks:
       - rag-network
@@ -210,7 +214,7 @@ services:
     ports:
       - "3030:3030"
     environment:
-      NEXTAUTH_URL: http://localhost:3001
+      NEXTAUTH_URL: http://localhost:3000
       DATABASE_URL: postgresql://langfuse:langfuse@langfuse-postgres:5432/langfuse
       # Security: Load sensitive values from .env file
       SALT: ${LANGFUSE_SALT}
@@ -258,9 +262,9 @@ services:
       clickhouse:
         condition: service_healthy
     ports:
-      - "3001:3000"
+      - "3000:3000"
     environment:
-      NEXTAUTH_URL: http://localhost:3001
+      NEXTAUTH_URL: http://localhost:3000
       # Security: Load sensitive values from .env file
       NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET}
       DATABASE_URL: postgresql://langfuse:langfuse@langfuse-postgres:5432/langfuse
