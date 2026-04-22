@@ -47,4 +47,6 @@ COPY --from=base /app /app
 ENV PATH="/app/.venv/bin:$PATH"
 
 # Run the application
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"] 
+# Multiple workers each start their own Telegram bot, causing getUpdates Conflict.
+# Use 1 worker; the async event loop handles concurrency for I/O-bound workloads.
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"] 

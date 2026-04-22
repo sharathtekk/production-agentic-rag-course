@@ -40,10 +40,12 @@ class TelegramBot:
         self.application.add_handler(CommandHandler("search", self._search_command))
         self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self._handle_question))
 
-        # Start polling
+        # Start polling — drop_pending_updates clears stale connections from
+        # previous instances to avoid Conflict errors on restart.
         await self.application.initialize()
+        await self.application.bot.delete_webhook(drop_pending_updates=True)
         await self.application.start()
-        await self.application.updater.start_polling()
+        await self.application.updater.start_polling(drop_pending_updates=True)
         logger.info("Telegram bot started successfully")
 
     async def stop(self) -> None:
